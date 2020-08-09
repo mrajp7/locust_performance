@@ -45,11 +45,11 @@ class RizekAuthTaskSet(TaskSet):
     @task
     def user_exists(self):
         self.client.post(get_url(), headers=headers,
-                         json={"phoneNumber": self.user.phone_number})
+                         json={"phoneNumber": self.user.phone_number},name="user_exists")
 
     @task(10)
     def service_tree(self):
-        self.client.get(get_url(), headers=headers)
+        self.client.get(get_url(), headers=headers,name="get_service_tree")
 
     @task(5)
     def create_new_job(self):
@@ -70,11 +70,11 @@ class RizekAuthTaskSet(TaskSet):
                                    }
                                ],
                                "title": "Maintenance"
-                               })
+                               },name="create_new_job")
 
     @task(5)
     def list_all_jobs(self):
-        resp = self.client.get(get_url(), headers=self.user.headers)
+        resp = self.client.get(get_url(), headers=self.user.headers,name="list_all_jobs")
         print(self.user.phone_number, len(resp.json()['data']['upcoming']))
 
     @task(2)
@@ -89,7 +89,7 @@ class RizekAuthTaskSet(TaskSet):
 
     @task(2)
     def list_cards(self):
-        self.client.get(get_url(), headers=self.user.headers)
+        self.client.get(get_url(), headers=self.user.headers,name="list_cards")
 
     @task
     def create_card(self):
@@ -99,7 +99,7 @@ class RizekAuthTaskSet(TaskSet):
                                                   "expiry": "2025-04",
                                                   "maskedPan": "401200******1112",
                                                   "scheme": "Visa"
-                                                  })
+                                                  },name="create_card")
         try:
             self.user.card_ids.append(
                 create_card_resp.json()['data']['cardId'])
@@ -125,7 +125,7 @@ class RizekUser(HttpUser):
         self.card_ids = []
         self.client.post(endpoints['send_otp'], headers=headers,
                          json={"phoneNumber": self.phone_number,
-                               "isForLogin": False})
+                               "isForLogin": False},name='send_tp')
         try:
             signup_resp = self.client.post(endpoints['new_signup'], headers=headers,
                                            json={"phoneNumber": self.phone_number,
@@ -142,7 +142,7 @@ class RizekUser(HttpUser):
                                                      "latitude": 12.12,
                                                      "token": "test"
                                                  }
-                                                 })
+                                                 },name='signup')
             print(signup_resp.text)
             self.token = signup_resp.json()['data']['token']
         except KeyError:
@@ -157,7 +157,7 @@ class RizekUser(HttpUser):
                                                 "os": "android",
                                                 "otp": 102030,
                                                 "phoneNumber": self.phone_number
-                                                })
+                                                },name='login')
             print(login_resp.text)
             self.token = login_resp.json()['data']['token']
         self.headers = {k: v for k, v in headers.items()}

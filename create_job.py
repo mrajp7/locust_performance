@@ -1,8 +1,9 @@
 import inspect
 import random
 from datetime import datetime, timedelta
+from uuid import uuid1
 from locust import HttpUser, task, between, TaskSet
-from locust.user import wait_time
+
 
 BASE_URL = "https://testapi.rizek.com/v1/api"
 
@@ -14,7 +15,11 @@ endpoints = {
     "logout": "/client/auth/logout",
     'service_tree': "/cac/operating/services_tree?cityId=1",
     "create_new_job": "/client/jobs",
-    "list_all_jobs": "/client/jobs/job"
+    "list_all_jobs": "/client/jobs/job",
+    "get_card_by_id": "/payments/cards/{id}",
+    "list_cards": "/payments/cards",
+    "delete_card": "/payments/cards/{id}",
+    "create_card": "/payments/cards"
 }
 
 headers = {'Content-Type': 'application/json'}
@@ -42,11 +47,11 @@ class RizekAuthTaskSet(TaskSet):
         self.client.post(get_url(), headers=headers,
                          json={"phoneNumber": self.user.phone_number})
 
-    @task(3)
+    @task(10)
     def service_tree(self):
         self.client.get(get_url(), headers=headers)
 
-    @task(2)
+    @task(5)
     def create_new_job(self):
         self.client.post(get_url(), headers=self.user.headers,
                          json={"addressId": 1413,
@@ -67,16 +72,57 @@ class RizekAuthTaskSet(TaskSet):
                                "title": "Maintenance"
                                })
 
-    @task(2)
+    @task(5)
     def list_all_jobs(self):
         resp = self.client.get(get_url(), headers=self.user.headers)
         print(self.user.phone_number, len(resp.json()['data']['upcoming']))
+
+    @task(2)
+    def get_card_by_id(self):
+        url = get_url()
+        try:
+            url = url.format(id=self.user.card_ids[-1])
+        except IndexError:
+            return
+        self.client.get(url, headers=self.user.headers,
+                        name='/payments/cards/id=[id]')
+
+    @task(2)
+    def list_cards(self):
+        self.client.get(get_url(), headers=self.user.headers)
+
+    @task
+    def create_card(self):
+        create_card_resp = self.client.post(get_url(), headers=self.user.headers,
+                                            json={"cardToken": str(uuid1()),
+                                                  "cardholderName": "Test Customer",
+                                                  "expiry": "2025-04",
+                                                  "maskedPan": "401200******1112",
+                                                  "scheme": "Visa"
+                                                  })
+        try:
+            self.user.card_ids.append(
+                create_card_resp.json()['data']['cardId'])
+        except KeyError:
+            pass
+
+    @task
+    def delete_card(self):
+        url = get_url()
+        try:
+            url = url.format(id=self.user.card_ids[-1])
+            self.user.card_ids = self.user.card_ids[:-1]
+        except IndexError:
+            return
+        self.client.delete(url, headers=self.user.headers,
+                           name='/payments/cards/id=[id]')
 
 
 class RizekUser(HttpUser):
     def __init__(self, env) -> None:
         super().__init__(env)
         self.phone_number = '+97155' + str(random.randint(1000000, 9999999))
+        self.card_ids = []
         self.client.post(endpoints['send_otp'], headers=headers,
                          json={"phoneNumber": self.phone_number,
                                "isForLogin": False})
